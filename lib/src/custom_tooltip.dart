@@ -59,6 +59,9 @@ class CustomTooltip extends StatefulWidget {
   ///
   /// This is applied to all text widgets inside the tooltip.
   final TextStyle? textStyle;
+    
+  /// Margins of the tooltip
+  final EdgeInsets? tooltipMargin;
 
   /// Creates a [CustomTooltip].
   ///
@@ -90,6 +93,7 @@ class CustomTooltip extends StatefulWidget {
     this.decoration,
     this.textStyle = const TextStyle(
         color: Color.fromARGB(255, 139, 209, 255), fontSize: 18),
+    this.tooltipMargin = const EdgeInsets.symmetric(vertical: 5, horizontal: 5),
   });
 
   @override
@@ -111,6 +115,7 @@ class CustomTooltipState extends State<CustomTooltip>
   bool _isTooltipVisible = false;
   bool _isTooltipPinned = false;
   bool _isGlobalRouteAdded = false;
+  int _nbrElementsShown = 0;
 
   /// Determines if the current platform is desktop or web.
   bool get _isDesktopOrWeb {
@@ -170,6 +175,7 @@ class CustomTooltipState extends State<CustomTooltip>
   /// Handles the start of a hover event.
   void _handleHoverStart() {
     if (!_isTooltipPinned) {
+      _nbrElementsShown++;
       _showTimer?.cancel();
       _hideTimer?.cancel();
       _showTimer = Timer(widget.hoverShowDelay, () {
@@ -183,8 +189,12 @@ class CustomTooltipState extends State<CustomTooltip>
   /// Handles the end of a hover event.
   void _handleHoverEnd() {
     if (!_isTooltipPinned) {
-      _showTimer?.cancel();
-      _startHideTimer();
+      _nbrElementsShown--;
+      if (_nbrElementsShown <= 0) {
+        _nbrElementsShown = 0;
+        _showTimer?.cancel();
+        _startHideTimer();
+      }
     }
   }
 
@@ -248,24 +258,24 @@ class CustomTooltipState extends State<CustomTooltip>
   /// Builds the tooltip overlay widget.
   Widget _buildTooltipOverlay(Offset position, Size size, Size screenSize) {
     double dx = 0;
-    double dy = size.height + 5;
+    double dy = size.height + (widget.tooltipMargin?.bottom ?? 5);
 
     // Adjust horizontal position if tooltip goes beyond right edge
     if (widget.tooltipWidth != null &&
-        position.dx + widget.tooltipWidth! > screenSize.width) {
-      dx = screenSize.width - position.dx - widget.tooltipWidth!;
+        position.dx + widget.tooltipWidth! + (widget.tooltipMargin?.right ?? 5) > screenSize.width) {
+      dx = screenSize.width - position.dx - widget.tooltipWidth! - (widget.tooltipMargin?.right ?? 5);
     }
 
     // Adjust horizontal position if tooltip goes beyond left edge
-    if (position.dx + dx < 0) {
-      dx = -position.dx;
+    if (position.dx + dx + (widget.tooltipMargin?.left ?? 5) < 0) {
+      dx = -position.dx - (widget.tooltipMargin?.left ?? 5);
     }
 
     // Adjust vertical position if tooltip goes beyond bottom edge
     if (widget.tooltipHeight != null &&
-        position.dy + size.height + 5 + widget.tooltipHeight! >
+        position.dy + size.height + (widget.tooltipMargin?.bottom ?? 5) + widget.tooltipHeight! >
             screenSize.height) {
-      dy = -widget.tooltipHeight! - 5;
+      dy = -widget.tooltipHeight! - (widget.tooltipMargin?.bottom ?? 5);
     }
 
     return Positioned(
@@ -281,19 +291,23 @@ class CustomTooltipState extends State<CustomTooltip>
             elevation: widget.elevation,
             borderRadius: BorderRadius.circular(widget.borderRadius),
             color: Colors.transparent,
-            child: Container(
-              width: widget.tooltipWidth,
-              height: widget.tooltipHeight,
-              decoration: widget.decoration ??
-                  BoxDecoration(
-                    color: widget.backgroundColor,
-                    borderRadius: BorderRadius.circular(widget.borderRadius),
-                  ),
-              padding: widget.padding,
-              child: DefaultTextStyle(
-                style:
-                    widget.textStyle ?? Theme.of(context).textTheme.bodyMedium!,
-                child: widget.tooltip,
+            child: MouseRegion(
+              onEnter: (_) => _isDesktopOrWeb ? _handleHoverStart() : null,
+              onExit: (_) => _isDesktopOrWeb ? _handleHoverEnd() : null,
+              child: Container(
+                width: widget.tooltipWidth,
+                height: widget.tooltipHeight,
+                decoration: widget.decoration ??
+                    BoxDecoration(
+                      color: widget.backgroundColor,
+                      borderRadius: BorderRadius.circular(widget.borderRadius),
+                    ),
+                padding: widget.padding,
+                child: DefaultTextStyle(
+                  style:
+                      widget.textStyle ?? Theme.of(context).textTheme.bodyMedium!,
+                  child: widget.tooltip,
+                ),
               ),
             ),
           ),
