@@ -116,6 +116,7 @@ class CustomTooltipState extends State<CustomTooltip>
   bool _isTooltipPinned = false;
   bool _isGlobalRouteAdded = false;
   int _nbrElementsShown = 0;
+  bool _delayHideTooltip = false;
 
   /// Determines if the current platform is desktop or web.
   bool get _isDesktopOrWeb {
@@ -162,6 +163,7 @@ class CustomTooltipState extends State<CustomTooltip>
       child: MouseRegion(
         onEnter: (_) => _isDesktopOrWeb ? _handleHoverStart() : null,
         onExit: (_) => _isDesktopOrWeb ? _handleHoverEnd() : null,
+        hitTestBehavior: HitTestBehavior.translucent,
         child: Listener(
           onPointerDown: _handlePointerDown,
           onPointerUp: _handlePointerUp,
@@ -201,11 +203,18 @@ class CustomTooltipState extends State<CustomTooltip>
   /// Handles pointer down events.
   void _handlePointerDown(PointerDownEvent event) {
     if (_isTooltipVisible && _isTooltipPinned) {
+      //print('*** _handlePointerDown calling _hideTooltip');
       _hideTooltip();
     } else {
       _showTooltipImmediately();
       _pinTooltip();
     }
+  }
+
+  void _handlePointerDown2(PointerDownEvent event) {
+    //print('*** _handlePointerDown2 calling _hideTooltip');
+    _delayHideTooltip = true;
+    //_hideTooltip();
   }
 
   /// Handles pointer up events.
@@ -294,21 +303,24 @@ class CustomTooltipState extends State<CustomTooltip>
             child: MouseRegion(
               onEnter: (_) => _isDesktopOrWeb ? _handleHoverStart() : null,
               onExit: (_) => _isDesktopOrWeb ? _handleHoverEnd() : null,
-              child: Container(
+              hitTestBehavior: HitTestBehavior.translucent,
+              child: Listener(
+              onPointerDown: _handlePointerDown2,
+              onPointerUp: _handlePointerUp,
+              behavior: HitTestBehavior.translucent,
+              child:Container(
                 width: widget.tooltipWidth,
                 height: widget.tooltipHeight,
-                decoration: widget.decoration ??
-                    BoxDecoration(
-                      color: widget.backgroundColor,
-                      borderRadius: BorderRadius.circular(widget.borderRadius),
-                    ),
+                decoration: widget.decoration ?? BoxDecoration(
+                  color: widget.backgroundColor,
+                  borderRadius: BorderRadius.circular(widget.borderRadius),
+                ),
                 padding: widget.padding,
                 child: DefaultTextStyle(
-                  style:
-                      widget.textStyle ?? Theme.of(context).textTheme.bodyMedium!,
+                  style: widget.textStyle ?? Theme.of(context).textTheme.bodyMedium!,
                   child: widget.tooltip,
                 ),
-              ),
+              ),),
             ),
           ),
         ),
@@ -320,8 +332,7 @@ class CustomTooltipState extends State<CustomTooltip>
   void _addGlobalRoute() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_isGlobalRouteAdded) {
-        GestureBinding.instance.pointerRouter
-            .addGlobalRoute(_handleGlobalPointerEvent);
+        GestureBinding.instance.pointerRouter.addGlobalRoute(_handleGlobalPointerEvent);
         _isGlobalRouteAdded = true;
       }
     });
@@ -334,7 +345,14 @@ class CustomTooltipState extends State<CustomTooltip>
       if (renderBox != null) {
         final localPosition = renderBox.globalToLocal(event.position);
         if (!renderBox.size.contains(localPosition)) {
-          _hideTooltip();
+          //print('*** _handleGlobalPointerEvent calling _hideTooltip');
+          if (_delayHideTooltip) {
+            _delayHideTooltip = false;
+            Timer(const Duration(milliseconds: 500), _hideTooltip);
+          }
+          else {
+            _hideTooltip();
+          }
         }
       }
     }
@@ -342,6 +360,7 @@ class CustomTooltipState extends State<CustomTooltip>
 
   /// Hides the tooltip.
   void _hideTooltip() {
+    _nbrElementsShown = 0;
     _showTimer?.cancel();
     _hideTimer?.cancel();
     _animationController.reverse().then((_) {
@@ -358,9 +377,9 @@ class CustomTooltipState extends State<CustomTooltip>
     _overlayEntry = null;
     _isTooltipVisible = false;
     if (_isGlobalRouteAdded) {
-      GestureBinding.instance.pointerRouter
-          .removeGlobalRoute(_handleGlobalPointerEvent);
+      GestureBinding.instance.pointerRouter.removeGlobalRoute(_handleGlobalPointerEvent);
       _isGlobalRouteAdded = false;
     }
   }
 }
+
